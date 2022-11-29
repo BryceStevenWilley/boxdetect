@@ -3,7 +3,7 @@ import numpy as np
 
 
 def apply_merge_transformations(
-        image, kernels, transformations=(cv2.MORPH_OPEN, 1), plot=False):
+        image, kernels, transformations=[(cv2.MORPH_OPEN, 1)], close_brackets=False, plot=False):
     """
     Process image by applying morphological transformations using OpenCV.
     It takes in a list of kernels as an input and itterates through that list applying each transormation to input image and merges all the results back together later.
@@ -35,12 +35,21 @@ def apply_merge_transformations(
                 morphs, transform, kernel, iterations=iterations)
         new_image += morphs
 
+    if close_brackets:
+        # We need to close just the top / bottom parts of [ ], so only extend in the horizontal direction.
+        k = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(4, 1))
+        morphs = new_image
+        morphs = cv2.morphologyEx(
+            morphs, cv2.MORPH_CLOSE, k, iterations=4)
+        new_image += morphs
+
     image = new_image
     image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY)[1]
 
     if plot:  # pragma: no cover
         cv2.imshow("rectangular shape enhanced image", image)
         cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     return image
 
@@ -71,6 +80,7 @@ def apply_thresholding(image, plot=False):
     if plot:  # pragma: no cover
         cv2.imshow("thresholded image", image)
         cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     return image
 
@@ -106,6 +116,8 @@ def get_rect_kernels(
             List of rectangular `numpy.ndarray` kernels
     """ # NOQA E501
 
+    # TODO(brycew): make this work with [ ]: by adding gaps above and below? how does the box kernel work?
+    # need to understand https://numpy.org/doc/stable/reference/generated/numpy.pad.html
     kernels = [
         np.pad(
             np.zeros(
@@ -121,6 +133,29 @@ def get_rect_kernels(
             int((1 + tolerance) * height_range[1]))
         if w / h >= wh_ratio_range[0] and w / h <= wh_ratio_range[1]
     ]
+    return kernels
+
+def get_bracket_kernels(
+        width_range, height_range,
+        wh_ratio_range=None,
+        border_thickness=1,
+        gap_multiplier = 4,
+        tolerance=0.02):
+    """
+    Kernels specifically built to find instances of [ ].
+    Can be pretty tempermental, and find lots of false positives in general text. It should be calibrated the text size
+    in your PDF.
+
+        gap_multiplier (int):
+            The gap between the top / bottom of the [ ]. i.e. 3 is 1/3, 4 means it's split into 1/4ths (middle is 1/2, left is 1/4, etc.)
+    """
+    kernels = get_rect_kernels(width_range, height_range, wh_ratio_range, border_thickness, tolerance)
+    for k in kernels:
+      h, w = k.shape
+      w2 = w // gap_multiplier
+      w3 = w // gap_multiplier * (gap_multiplier - 1)
+      k[0, w2:w3] = 0
+      k[-1, w2:w3] = 0
     return kernels
 
 
@@ -269,6 +304,6 @@ def get_image(img):
         image_org = img.copy()
         image_org = image_org.astype(np.uint8)
     elif type(img) is str:
-        print("Processing file: ", img)
+        #print("Processing file: ", img)
         image_org = cv2.imread(img)
     return image_org

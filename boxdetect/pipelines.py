@@ -24,7 +24,7 @@ def get_checkboxes(
     - group rectangles first vertically and then horizontally based on `cfg.vertical_max_distance` and `cfg.horizontal_max_distance_multiplier`
     - extract groups of boxes which have only a single box inside (checkboxes)
     - run estimation function to determine if checkbox contains pixels (naive approach for checking if it's checked)
-    - return an array of arrays with following information for each detected checkbox: `[checkbox_coords, contains_pixels, cropped_checkbox]`                    
+    - return an array of arrays with following information for each detected checkbox: `[checkbox_coords, contains_pixels, cropped_checkbox]`
         - checkbox_coords - `numpy.ndarray` rectangle (x,y,width,height)
         - contains_pixels - `bool`, True/False
         - cropped_checkbox - `numpy.ndarray` of cropped checkbox image
@@ -219,9 +219,14 @@ def get_boxes(img, cfg: config.PipelinesConfig, plot=False):
                     horizontal_length=int(min_w * 0.95),
                     vertical_length=int(min_h * 0.95),
                     thickness=morph_kernels_thickness)
+            elif morph_kernels_type == 'brackets':
+                kernels = img_proc.get_bracket_kernels(
+                    width_range=(min_w, max_w), height_range=(min_h, max_h),
+                    wh_ratio_range=wh_ratio_range,
+                    border_thickness=morph_kernels_thickness)
 
             image = img_proc.apply_merge_transformations(
-                image, kernels, plot=plot)
+                image, kernels, close_brackets=morph_kernels_type == 'brackets', plot=plot)
 
             # find contours in the thresholded image
             cnts = rect_proc.get_contours(image)
@@ -277,7 +282,7 @@ def get_boxes(img, cfg: config.PipelinesConfig, plot=False):
         cv2.imshow("Org image with boxes", image_org)
         cv2.waitKey(0)
 
-    if len(rects) == 0:
-        print("WARNING: No rectangles were found in the input image.")
+    #if len(rects) == 0:
+    #    print("WARNING: No rectangles were found in the input image.")
 
     return rects, grouping_rectangles, img, image_org
